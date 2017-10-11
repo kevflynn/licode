@@ -80,6 +80,11 @@ exports.RoomController = function (spec) {
             log.info('message: addExternalInput,  streamId: ' + publisherId + ', url:' + url);
 
             getErizoJS(function(erizoId) {
+                if (erizoId === 'timeout') {
+                    callback('timeout');
+                    return;
+                }
+
                 // then we call its addPublisher method.
     	        var args = [publisherId, url];
 

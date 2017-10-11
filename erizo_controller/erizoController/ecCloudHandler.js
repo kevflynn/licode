@@ -23,29 +23,37 @@ exports.EcCloudHandler = function (spec) {
       .find({})
       .toArray((err, erizos) => {
         if (err) {
-          log.error('message: failed to fetch erizos from db, ' + logger.objectToLog(err));
+          log.error(`message: failed to fetch erizos from db, ${logger.objectToLog(err)}`);
           return;
         }
-        var groupedByAgent = _.groupBy(erizos, 'erizoAgentID');
-        var agentsStats = _.mapValues(groupedByAgent, erizos => {
-          return _.reduce(erizos, (acc, { publishersCount, subscribersCount, lastUpdated }) => {
-            acc.publishersCount += publishersCount;
-            acc.subscribersCount += subscribersCount;
-            if (!acc.timeout) {
-              acc.timeout = lastUpdated;
-            }
-            acc.timeout = lastUpdated > acc.timeout ? lastUpdated : acc.timeout;
-            return acc;
-          }, { publishersCount: 0, subscribersCount: 0, timeout: null });
+
+        const now = new Date();
+
+        const groupedByAgent = _.groupBy(erizos, 'erizoAgentID');
+        agents = _.mapValues(groupedByAgent, (erizoJSs) => {
+          const groupedByErizoJS = _.groupBy(erizoJSs, 'erizoJSID');
+          const jsStats = _.mapValues(groupedByErizoJS, group =>
+            _.minBy(group, stat => now - stat.lastUpdated)
+          );
+          const recentStats = _.pickBy(jsStats, stat => (now - stat.lastUpdated) <= EA_TIMEOUT);
+          const recentStatsValues = _.values(recentStats);
+          return _.reduce(
+            recentStatsValues,
+            (acc, { publishersCount, subscribersCount }) => {
+              acc.publishersCount += publishersCount;
+              acc.subscribersCount += subscribersCount;
+              return acc;
+            },
+            { publishersCount: 0, subscribersCount: 0 }
+          );
         });
-        var pairs = _.toPairs(agentsStats);
-        agents = _.fromPairs(pairs.filter(([agentId, { timeout }]) => timeout <= EA_TIMEOUT));
-        var now = new Date();
+
         timedOutErizos = erizos.filter(({ lastUpdated }) => {
-          var diff = now - lastUpdated;
+          const diff = now - lastUpdated;
           return diff > EA_TIMEOUT && diff <= EA_OLD_TIMEOUT;
         });
-        var oldErizos = erizos.filter(({ lastUpdated }) => (now - lastUpdated) > EA_OLD_TIMEOUT);
+
+        const oldErizos = erizos.filter(({ lastUpdated }) => (now - lastUpdated) > EA_OLD_TIMEOUT);
         if (oldErizos.length) {
           deleteOldErizos(oldErizos);
         }
