@@ -76,11 +76,11 @@ exports.EcCloudHandler = function (spec) {
       });
   };
 
-  var getErizoAgent;
-
-  if (GLOBAL.config.erizoController.cloudHandlerPolicy) {
-    getErizoAgent = require('./ch_policies/' +
-                      GLOBAL.config.erizoController.cloudHandlerPolicy).getErizoAgent;
+  let getErizoAgent;
+  if (global.config.erizoController.cloudHandlerPolicy) {
+    getErizoAgent = require(`./ch_policies/${global.config.erizoController.cloudHandlerPolicy}`).getErizoAgent;
+  } else {
+    getErizoAgent = (agents) => 'ErizoAgent';
   }
 
   const tryAgain = function (count, agentQueue, callback) {
@@ -89,7 +89,7 @@ exports.EcCloudHandler = function (spec) {
       return;
     }
 
-    const nextAgentQueue = getErizoAgent ? getErizoAgent(agents) : 'ErizoAgent';
+    const nextAgentQueue = getErizoAgent(agents);
 
     log.warn(`message: agent selected timed out trying again, code: ${WARN_TIMEOUT}, agentQueue: ${agentQueue}, nextAgentQueue: ${nextAgentQueue}`);
 
@@ -107,7 +107,7 @@ exports.EcCloudHandler = function (spec) {
   };
 
   that.getErizoJS = function (callback) {
-    const agentQueue = getErizoAgent ? getErizoAgent(agents) : 'ErizoAgent';
+    const agentQueue = getErizoAgent(agents);
 
     log.info(`message: createErizoJS, agentQueue: ${agentQueue}`);
 
