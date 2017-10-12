@@ -83,51 +83,45 @@ exports.EcCloudHandler = function (spec) {
                       GLOBAL.config.erizoController.cloudHandlerPolicy).getErizoAgent;
   }
 
-  var tryAgain = function (count, agentId, callback) {
+  const tryAgain = function (count, agentQueue, callback) {
     if (count >= AGENTS_ATTEMPTS) {
       callback('timeout');
       return;
     }
 
-    log.warn('message: agent selected timed out trying again, ' +
-             'code: ' + WARN_TIMEOUT + ', agentId:' + agentId);
+    const nextAgentQueue = getErizoAgent ? getErizoAgent(agents) : 'ErizoAgent';
 
-    var agentQueue = 'ErizoAgent';
+    log.warn(`message: agent selected timed out trying again, code: ${WARN_TIMEOUT}, agentQueue: ${agentQueue}, nextAgentQueue: ${nextAgentQueue}`);
 
-    if (getErizoAgent) {
-      agentQueue = getErizoAgent(agents);
-    }
-
-    amqper.callRpc(agentQueue, 'createErizoJS', [], {callback: function(erizoId) {
-      if (erizoId === 'timeout') {
-        tryAgain(++count, agentId ,callback);
-      } else {
-        callback(erizoId.erizoId, erizoId.agentId);
+    amqper.callRpc(nextAgentQueue, 'createErizoJS', [], {
+      callback(resp) {
+        if (resp === 'timeout') {
+          tryAgain(++count, agentQueue, callback);
+        } else {
+          const { erizoId, agentId } = resp;
+          log.info(`message: createErizoJS/tryAgain success, erizoId: ${erizoId}, agentId: ${agentId}, count: ${count}`);
+          callback(erizoId, agentId);
+        }
       }
-    }});
+    });
   };
 
-  that.getErizoJS = function(callback) {
+  that.getErizoJS = function (callback) {
+    const agentQueue = getErizoAgent ? getErizoAgent(agents) : 'ErizoAgent';
 
-    var agentQueue = 'ErizoAgent';
+    log.info(`message: createErizoJS, agentQueue: ${agentQueue}`);
 
-    if (getErizoAgent) {
-      agentQueue = getErizoAgent(agents);
-    }
-
-    log.info('message: createErizoJS, agentId: ' + agentQueue);
-
-    amqper.callRpc(agentQueue, 'createErizoJS', [], {callback: function(resp) {
-      var erizoId = resp.erizoId;
-      var agentId = resp.agentId;
-      log.info('message: createErizoJS success, erizoId: ' + erizoId + ', agentId: ' + agentId);
-
-      if (resp === 'timeout') {
-        tryAgain(0, agentId, callback);
-      } else {
-        callback(erizoId, agentId);
+    amqper.callRpc(agentQueue, 'createErizoJS', [], {
+      callback(resp) {
+        if (resp === 'timeout') {
+          tryAgain(0, agentQueue, callback);
+        } else {
+          const { erizoId, agentId } = resp;
+          log.info(`message: createErizoJS success, erizoId: ${erizoId}, agentId: ${agentId}`);
+          callback(erizoId, agentId);
+        }
       }
-    }});
+    });
   };
 
   that.deleteErizoJS = function(erizoId) {
