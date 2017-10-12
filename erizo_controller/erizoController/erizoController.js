@@ -496,6 +496,8 @@ var listen = function () {
                         socket.room.streams[id] = st;
                         callback(id);
                         sendMsgToRoom(socket.room, 'onAddStream', st.getPublicStream());
+                    } else if (result === 'overloaded') {
+                        callback(null, 'Service Overloaded');
                     } else {
                         callback(null, 'Error adding External Input');
                     }

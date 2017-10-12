@@ -43,6 +43,14 @@ exports.ErizoJSController = function (erizoAgentID, erizoJSID, threadPool, ioThr
     that.publishers = publishers;
     that.ioThreadPool = io;
 
+    const pubSubCounts = function () {
+        const publishersKeys = Object.keys(publishers);
+        const publishersCount = publishersKeys.length;
+        const subscribersCounts = publishersKeys.map(key => publishers[key].numSubscribers);
+        const subscribersCount = subscribersCounts.reduce((acc, i) => acc + i, 0);
+        return { publishersCount, subscribersCount };
+    };
+
     const STREAM_STAT_ENTRY_TPL = {
         min: +Infinity,
         max: -Infinity,
@@ -74,14 +82,12 @@ exports.ErizoJSController = function (erizoAgentID, erizoJSID, threadPool, ioThr
         }
     };
 
-    const updateStats = () => {
-        const publishersKeys = Object.keys(publishers);
-        const publishersCount = publishersKeys.length;
-        const subscribersCounts = publishersKeys.map(key => publishers[key].numSubscribers);
-        const subscribersCount = subscribersCounts.reduce((acc, i) => acc + i, 0);
+    const updateStats = function () {
+        const { publishersCount, subscribersCount } = pubSubCounts();
 
-        const statPromises = publishersKeys
-            .map(to => new Promise(resolve => that.getStreamStats(to, (e, s) => resolve(s))));
+        const statPromises = Object.keys(publishers).map(to =>
+            new Promise(resolve => that.getStreamStats(to, (e, s) => resolve(s)))
+        );
 
         Promise.all(statPromises)
             .then((allStats) => {
@@ -346,7 +352,10 @@ exports.ErizoJSController = function (erizoAgentID, erizoJSID, threadPool, ioThr
     };
 
     that.addExternalInput = function (from, url, callback) {
-        if (publishers[from] === undefined) {
+        const { publishersCount, subscribersCount } = pubSubCounts();
+        if (publishersCount + subscribersCount > COSTAM) {
+            callback('callback', 'overloaded');
+        } else if (publishers[from] === undefined) {
             var ei = publishers[from] = new ExternalInput(from, threadPool, ioThreadPool, url);
             var answer = ei.init();
             if (answer >= 0) {
