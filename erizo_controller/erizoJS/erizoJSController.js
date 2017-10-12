@@ -353,7 +353,8 @@ exports.ErizoJSController = function (erizoAgentID, erizoJSID, threadPool, ioThr
 
     that.addExternalInput = function (from, url, callback) {
         const { publishersCount, subscribersCount } = pubSubCounts();
-        if (publishersCount + subscribersCount > COSTAM) {
+        if (publishersCount + subscribersCount > global.config.erizo.publisherCapacity) {
+            log.error(`message: Publisher capacity exceeded, id: ${from}`);
             callback('callback', 'overloaded');
         } else if (publishers[from] === undefined) {
             var ei = publishers[from] = new ExternalInput(from, threadPool, ioThreadPool, url);
