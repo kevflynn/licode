@@ -81,6 +81,7 @@ exports.RoomController = function (spec) {
 
             getErizoJS(function(erizoId) {
                 if (erizoId === 'timeout') {
+                    log.error(`message: getErizoJS timed out,  streamId: ${publisherId}, url:${url}`);
                     callback('timeout');
                     return;
                 }
