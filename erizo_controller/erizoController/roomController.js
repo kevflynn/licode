@@ -168,13 +168,12 @@ exports.RoomController = function (spec) {
 
             // We create a new ErizoJS with the publisherId.
             getErizoJS(function(erizoId, agentId) {
-
                 if (erizoId === 'timeout') {
-                    log.error('message: addPublisher ErizoAgent timeout, streamId: ' +
-                              publisherId + ', ' + logger.objectToLog(options.metadata));
+                    log.error(`message: addPublisher ErizoAgent timeout, streamId: ${publisherId}, ${logger.objectToLog(options.metadata)}`);
                     callback('timeout-agent');
                     return;
                 }
+
                 log.info('message: addPublisher erizoJs assigned, ' +
                         'erizoId: ' + erizoId + ', streamId: ', publisherId +
                          ', ' + logger.objectToLog(options.metadata));
