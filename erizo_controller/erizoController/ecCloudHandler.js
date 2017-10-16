@@ -30,7 +30,7 @@ exports.EcCloudHandler = function (spec) {
         const now = new Date();
 
         const groupedByAgent = _.groupBy(erizos, 'erizoAgentID');
-        agents = _.mapValues(groupedByAgent, (erizoJSs) => {
+        const counts = _.mapValues(groupedByAgent, (erizoJSs) => {
           const groupedByErizoJS = _.groupBy(erizoJSs, 'erizoJSID');
           const jsStats = _.mapValues(groupedByErizoJS, group =>
             _.minBy(group, stat => now - stat.lastUpdated)
@@ -42,11 +42,13 @@ exports.EcCloudHandler = function (spec) {
             (acc, { publishersCount, subscribersCount }) => {
               acc.publishersCount += publishersCount;
               acc.subscribersCount += subscribersCount;
+              acc.count += 1;
               return acc;
             },
-            { publishersCount: 0, subscribersCount: 0 }
+            { publishersCount: 0, subscribersCount: 0, count: 0 }
           );
         });
+        agents = _.pickBy(counts, ({ count }) => count > 0);
 
         timedOutErizos = erizos.filter(({ lastUpdated }) => {
           const diff = now - lastUpdated;
