@@ -592,6 +592,10 @@ var listen = function () {
                                   'streamId: ' + id + ', clientId: ' + socket.id);
                         callback(null, 'ErizoAgent or ErizoJS is not reachable');
                         return;
+                    } else if (signMess === 'overloaded') {
+                      log.error(`message: addPublisher Service Overloaded, streamId: ${id}, clientId: ${socket.id}`);
+                      callback(null, 'Service Overloaded');
+                      return;
                     }
 
                     socket.emit('signaling_message_erizo', {mess: signMess, streamId: id});

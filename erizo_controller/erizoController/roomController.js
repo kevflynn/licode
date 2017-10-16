@@ -209,6 +209,10 @@ exports.RoomController = function (spec) {
                         }
                         callback('timeout-erizojs');
                         return;
+                    } else if (data === 'overloaded') {
+                      log.error(`message: addPublisher ErizoJS service overloaded, streamId: ${publisherId}, erizoId: ${getErizoQueue(publisherId)}, ${logger.objectToLog(options.metadata)}`);
+                      callback('overloaded');
+                      return;
                     } else {
                         if (data.type === 'initializing') {
                             data.agentId = agentId;
