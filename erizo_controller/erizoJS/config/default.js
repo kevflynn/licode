@@ -76,7 +76,7 @@ config.erizo.publisherTimeout.keepAliveCount = 2;
 config.erizo.statsUpdateInterval = 5000;
 
 // Publisher + subscriber capacity per ErizoJS
-config.erizo.sessionCapacity = 3;
+config.erizo.sessionCapacity = 60;
 
 
 config.erizoController = {};
