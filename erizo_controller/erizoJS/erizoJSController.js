@@ -475,21 +475,21 @@ exports.ErizoJSController = function (erizoAgentID, erizoJSID, threadPool, ioThr
      * of the OneToManyProcessor.
      */
     that.addPublisher = function (from, options, callback) {
-        var publisher;
-
-        if (publishers[from] === undefined) {
-
+        const { publishersCount, subscribersCount } = pubSubCounts();
+        if (publishersCount + subscribersCount > global.config.erizo.publisherCapacity) {
+            log.error(`message: Publisher capacity exceeded, id: ${from}`);
+            callback('callback', 'overloaded');
+        } else if (publishers[from] === undefined) {
             log.info('message: Adding publisher, ' +
                      'streamId: ' + from + ', ' +
                      logger.objectToLog(options) + ', ' +
                      logger.objectToLog(options.metadata));
-            publisher = new Publisher(from, threadPool, ioThreadPool, options);
+            const publisher = new Publisher(from, threadPool, ioThreadPool, options);
             publishers[from] = publisher;
 
             initWebRtcConnection(publisher.wrtc, callback, from, undefined, options);
-
         } else {
-            publisher = publishers[from];
+            const publisher = publishers[from];
             if (publisher.numSubscribers === 0) {
                 log.warn('message: publisher already set but no subscribers will republish, ' +
                          'code: ' + WARN_CONFLICT + ', streamId: ' + from + ', ' +
