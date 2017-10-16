@@ -7,11 +7,13 @@ var log = logger.getLogger('EcCloudHandler');
 var db = require('./database').db;
 var _ = require('lodash');
 
-var EA_TIMEOUT = 30000;
-var EA_OLD_TIMEOUT = 30 * 60 * 1000;
-var GET_EA_INTERVAL = 5000;
-var AGENTS_ATTEMPTS = 5;
-var WARN_UNAVAILABLE = 503, WARN_TIMEOUT = 504;
+const EA_TIMEOUT = 30000;
+const EA_OLD_TIMEOUT = 30 * 60 * 1000;
+const GET_EA_INTERVAL = 5000;
+const AGENTS_ATTEMPTS = 5;
+const AGENTS_GENERAL_QUEUE_ATTEMPTS = 2;
+const WARN_UNAVAILABLE = 503;
+const WARN_TIMEOUT = 504;
 exports.EcCloudHandler = function (spec) {
   var that = {},
   amqper = spec.amqper,
@@ -35,6 +37,10 @@ exports.EcCloudHandler = function (spec) {
           const jsStats = _.mapValues(groupedByErizoJS, group =>
             _.minBy(group, stat => now - stat.lastUpdated)
           );
+          // BEWARE! When unused agent is quickly destroyed and restarted, the old one might
+          //         pass this filter and eventually be treated as the least used one,
+          //         even though it doesn't exist anymore. Usually falling back to general
+          //         ErizoAgent queue should do.
           const recentStats = _.pickBy(jsStats, stat => (now - stat.lastUpdated) <= EA_TIMEOUT);
           const recentStatsValues = _.values(recentStats);
           return _.reduce(
@@ -91,7 +97,12 @@ exports.EcCloudHandler = function (spec) {
       return;
     }
 
-    const nextAgentQueue = getErizoAgent(agents);
+    let nextAgentQueue;
+    if (AGENTS_ATTEMPTS - count <= AGENTS_GENERAL_QUEUE_ATTEMPTS) {
+      nextAgentQueue = 'ErizoAgent';
+    } else {
+      nextAgentQueue = getErizoAgent(agents);
+    }
 
     log.warn(`message: agent selected timed out trying again, code: ${WARN_TIMEOUT}, agentQueue: ${agentQueue}, nextAgentQueue: ${nextAgentQueue}`);
 
