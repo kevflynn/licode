@@ -75,8 +75,8 @@ config.erizo.publisherTimeout.keepAliveCount = 2;
 // It should be synchronized with config.erizoAgent.statsUpdateInterval
 config.erizo.statsUpdateInterval = 5000;
 
-// Publisher capacity per ErizoJS
-config.erizo.publisherCapacity = 3;
+// Publisher + subscriber capacity per ErizoJS
+config.erizo.sessionCapacity = 3;
 
 
 config.erizoController = {};

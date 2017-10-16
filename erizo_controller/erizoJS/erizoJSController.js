@@ -353,7 +353,7 @@ exports.ErizoJSController = function (erizoAgentID, erizoJSID, threadPool, ioThr
 
     that.addExternalInput = function (from, url, callback) {
         const { publishersCount, subscribersCount } = pubSubCounts();
-        if (publishersCount + subscribersCount >= global.config.erizo.publisherCapacity) {
+        if (publishersCount + subscribersCount >= global.config.erizo.sessionCapacity) {
             log.error(`message: Publisher capacity exceeded, id: ${from}`);
             callback('callback', 'overloaded');
         } else if (publishers[from] === undefined) {
@@ -476,7 +476,7 @@ exports.ErizoJSController = function (erizoAgentID, erizoJSID, threadPool, ioThr
      */
     that.addPublisher = function (from, options, callback) {
         const { publishersCount, subscribersCount } = pubSubCounts();
-        if (publishersCount + subscribersCount >= global.config.erizo.publisherCapacity) {
+        if (publishersCount + subscribersCount >= global.config.erizo.sessionCapacity) {
             log.error(`message: Publisher capacity exceeded, id: ${from}`);
             callback('callback', 'overloaded');
         } else if (publishers[from] === undefined) {
