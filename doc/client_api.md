@@ -289,12 +289,12 @@ It gets the URL of an image frame from the video.
 
 ## Update the spec of a stream
 
-It updates the audio and video maximum bandwidth for a publisher.
+It updates the audio and video maximum bandwidth for a publisher or a subscriber (it will affect other subscribers when Simulcast is not used).
 
 It can also be used in remote streams to toggle `slideShowMode`
 
 <example>
-You can update the maximun bandwidth of video and audio. These values are defined in the object passed to the function. You can also pass a callback function to get the final result.
+You can update the maximum bandwidth of video and audio. These values are defined in the object passed to the function. You can also pass a callback function to get the final result.
 </example>
 
 ```
@@ -342,7 +342,7 @@ In the next table we can see the functions of this class:
 | [disconnect()](#disconnect-from-room)                    | It disconnects from the `room`.                                                   |
 | [startRecording(stream)](#start-recording)               | Starts recording the `stream`.                                                    |
 | [stopRecording(recordingId)](#stop-recording)            | Stops a recording identified by its `recordingId`.                                |
-| [getSreamsByAttribute(name, value)](#get-streams-by-attribute) | It returns a list of the remote streams that have the attribute specified by name - value strings.  |
+| [getStreamsByAttribute(name, value)](#get-streams-by-attribute) | It returns a list of the remote streams that have the attribute specified by name - value strings.  |
 
 
 ## Open a connection to Room
@@ -383,10 +383,24 @@ room.addEventListener("stream-added", function(event) {
 });
 ```
 
-`room.publish` also allows to set a bandwidth limit for the localStream. We do this by passing the `maxVideoBW` variable as an option. The BW is expressed in Kbps. Keep in mind that the field `config.erizoController.defaultVideoBW` in the server configuration has higher priority than this one.
+`room.publish` also allows to set a bandwidth limit for the localStream. We do this by passing the `maxVideoBW` variable as an option. The BW is expressed in Kbps. Keep in mind that the field `config.erizoController.maxVideoBW` in the server configuration has higher priority than this one and that `config.erizoController.defaultVideoBW` will be used by default if this option is not passed.
 
 ```
 room.publish(localStream, {maxVideoBW:300});
+```
+
+We can also force the client to use a TURN server when publishing by setting the next parameter:
+
+```
+room.publish(localStream, {forceTurn: true});
+```
+
+There are two options that allow advance control of video bitrate in Chrome:
+- `startVideoBW`: Configures Chrome to start sending video at the specified bitrate instead of the default one. 
+- `hardMinVideoBW`: Configures a hard limit for the minimum video bitrate. 
+
+```
+room.publish(localStream, {startVideoBW: 1000, hardMinVideoBW:500});
 ```
 
 In `room.publish` you can include a callback with two parameters, `id` and `error`. If the stream has been published, `id` contains the id of that stream. On the other hand, if there has been any kind of error, `id` is `undefined` and the error is described in `error`.
@@ -450,6 +464,18 @@ room.addEventListener("stream-subscribed", function(streamEvt) {
 room.subscribe(stream, {audio: true, video: false});
 ```
 
+`room.subscribe` also allows to set a bandwidth limit for a subscription. We do this by passing the `maxVideoBW` variable as an option. The BW is expressed in Kbps. Keep in mind that the field `config.erizoController.maxVideoBW` in the server configuration has higher priority than this one and that `config.erizoController.defaultVideoBW` will be used by default if this option is not passed. More importantly, if the publisher is not using simulcast, the lowest `maxVideoBW` set to a subscriber will limit the max bandwidth used by that particular stream for the publisher and all the subscribers.
+
+```
+room.subscribe(stream, {maxVideoBW:300});
+```
+
+We can also force the client to use a TURN server when subscribing by setting the next parameter:
+
+```
+room.subscribe(localStream, {forceTurn: true});
+```
+
 In `room.subscribe` you can include a callback with two parameters, `result` and `error`. If the stream has been subscribed, `result` is true. On the other hand, if there has been any kind of error, `result` is `undefined` and the error is described in `error`.
 
 <example>
@@ -480,6 +506,20 @@ room.subscribe(stream, {audio: true, video: true, slideShowMode:true}, function(
 
 `SlideShowMode` can also be toggled on or off using `stream.updateConfiguration`. Keep in mind this will only work on remote streams (subscriptions).
 
+When we enable Simulcast it is also interesting to specify whether the subscriber should not receive a resolution or frame rate beyond a maximum. We
+can configure it like in the example below:
+
+```
+room.subscribe(stream, {video: {height: {max: 480}, width: {max: 640}, frameRate: {max:20}}}, function(result, error){
+  if (result === undefined){
+    console.log("Error subscribing to stream", error);
+  } else {
+    console.log("Stream subscribed!");
+  }
+});
+```
+
+It would help us not wasting CPU or bandwidth if, for instance, we will not render videos in a <video> element bigger than 640x480.
 
 ## Unsubscribe from a remote stream
 
@@ -899,17 +939,21 @@ You can configure and customize the way ErizoClient:
 
 Running erizo clients in your node.js applications.
 
-You can also run erizo clients in your node.js applications with the same API explained here. You can connect to rooms, publish and subscribe to streams and manage events. You need only to import the node module **erizofc.js**
+You can also run erizo clients in your node.js applications with the same API explained here. You can connect to rooms, publish and subscribe to streams and manage events. You need only to import the node module **erizofc.js**. This adds a new dependency that you will need to install: ` npm install socket.io-client`
 
 ```
-var Erizo = require('.erizofc').Erizo;
+var newIo = require('socket.io-client');
+var Erizo = require('.erizofc');
+```
+
+The line to initialize a room changes slightly. So, once you have a token:
+```
+var room = Erizo.Room(newIo, undefined, {token:'theToken'});
 ```
 
 And now you can use the API like explained for the browser case, calling `Erizo.Room`, `Erizo.Stream` and `Erizo.Events`. Note that you can not publish/subscribe streams with video and/or audio. We are working on this feature in order to develop another way of distribute video/audio streams.
 
 You can also use Erizo Client Logger for managing log levels, etc.
-
 ```
-var L = require('.erizofc').L;
-L.Logger.setLogLevel(2);
+Erizo.Logger.setLogLevel(Erizo.Logger.ERROR);
 ```

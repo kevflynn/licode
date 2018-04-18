@@ -3,6 +3,7 @@
 
 #include <thread/Scheduler.h>
 #include <rtp/LayerDetectorHandler.h>
+#include <rtp/PacketCodecParser.h>
 #include <rtp/RtpHeaders.h>
 #include <MediaDefinitions.h>
 #include <WebRtcConnection.h>
@@ -21,7 +22,7 @@ using ::testing::IsNull;
 using ::testing::Args;
 using ::testing::Return;
 using ::testing::AllOf;
-using erizo::dataPacket;
+using erizo::DataPacket;
 using erizo::packetType;
 using erizo::AUDIO_PACKET;
 using erizo::VIDEO_PACKET;
@@ -29,6 +30,7 @@ using erizo::IceConfig;
 using erizo::RtpMap;
 using erizo::RtpHeader;
 using erizo::LayerDetectorHandler;
+using erizo::PacketCodecParser;
 using erizo::WebRtcConnection;
 using erizo::Pipeline;
 using erizo::InboundHandler;
@@ -68,13 +70,15 @@ class LayerDetectorHandlerVp8Test : public erizo::BaseHandlerTest,
   }
 
   void setHandler() override {
-    std::vector<RtpMap>& payloads = connection->getRemoteSdpInfo().getPayloadInfos();
+    std::vector<RtpMap>& payloads = media_stream->getRemoteSdpInfo()->getPayloadInfos();
     payloads.push_back({96, "VP8"});
     payloads.push_back({98, "VP9"});
+    codec_parser_handler = std::make_shared<PacketCodecParser>();
     layer_detector_handler = std::make_shared<LayerDetectorHandler>();
+    pipeline->addBack(codec_parser_handler);
     pipeline->addBack(layer_detector_handler);
 
-    connection->setVideoSourceSSRCList({kArbitrarySsrc1, kArbitrarySsrc2});
+    media_stream->setVideoSourceSSRCList({kArbitrarySsrc1, kArbitrarySsrc2});
     createVP8Packet(ssrc, tid, false);
   }
 
@@ -87,8 +91,9 @@ class LayerDetectorHandlerVp8Test : public erizo::BaseHandlerTest,
     internalTearDown();
   }
 
+  std::shared_ptr<PacketCodecParser> codec_parser_handler;
   std::shared_ptr<LayerDetectorHandler> layer_detector_handler;
-  std::shared_ptr<dataPacket> packet;
+  std::shared_ptr<DataPacket> packet;
   int ssrc;
   int tid;
   int spatial_layer_id;

@@ -1,7 +1,8 @@
-/* global document*/
+/* global document */
 
 import { EventDispatcher, StreamEvent } from './Events';
-import Connection from './Connection';
+import ConnectionHelpers from './utils/ConnectionHelpers';
+import ErizoMap from './utils/ErizoMap';
 import VideoPlayer from './views/VideoPlayer';
 import AudioPlayer from './views/AudioPlayer';
 import Logger from './utils/Logger';
@@ -10,7 +11,7 @@ import Logger from './utils/Logger';
  * Class Stream represents a local or a remote Stream in the Room. It will handle the WebRTC
  * stream and identify the stream and where it should be drawn.
  */
-const Stream = (altConnection, specInput) => {
+const Stream = (altConnectionHelpers, specInput) => {
   const spec = specInput;
   const that = EventDispatcher(spec);
 
@@ -29,7 +30,24 @@ const Stream = (altConnection, specInput) => {
   that.desktopStreamId = spec.desktopStreamId;
   that.audioMuted = false;
   that.videoMuted = false;
-  that.Connection = altConnection === undefined ? Connection : altConnection;
+  that.ConnectionHelpers =
+    altConnectionHelpers === undefined ? ConnectionHelpers : altConnectionHelpers;
+
+  const onStreamAddedToPC = (evt) => {
+    if (evt.stream.id === that.getLabel()) {
+      that.emit(StreamEvent({ type: 'added', stream: evt.stream }));
+    }
+  };
+
+  const onStreamRemovedFroPC = (evt) => {
+    if (evt.stream.id === that.getLabel()) {
+      that.emit(StreamEvent({ type: 'removed', stream: that }));
+    }
+  };
+
+  const onICEConnectionStateChange = (state) => {
+    that.emit(StreamEvent({ type: 'icestatechanged', msg: state }));
+  };
 
   if (that.videoSize !== undefined &&
         (!(that.videoSize instanceof Array) ||
@@ -52,6 +70,13 @@ const Stream = (altConnection, specInput) => {
     return id;
   };
 
+  that.getLabel = () => {
+    if (that.stream && that.stream.id) {
+      return that.stream.id;
+    }
+    return spec.label;
+  };
+
   // Get attributes of this stream.
   that.getAttributes = () => spec.attributes;
 
@@ -69,13 +94,13 @@ const Stream = (altConnection, specInput) => {
   };
 
   // Indicates if the stream has audio activated
-  that.hasAudio = () => spec.audio;
+  that.hasAudio = () => spec.audio !== false && spec.audio !== undefined;
 
   // Indicates if the stream has video activated
-  that.hasVideo = () => spec.video;
+  that.hasVideo = () => spec.video !== false && spec.video !== undefined;
 
   // Indicates if the stream has data activated
-  that.hasData = () => spec.data;
+  that.hasData = () => spec.data !== false && spec.data !== undefined;
 
   // Indicates if the stream has screen activated
   that.hasScreen = () => spec.screen;
@@ -83,6 +108,26 @@ const Stream = (altConnection, specInput) => {
   that.hasMedia = () => spec.audio || spec.video || spec.screen;
 
   that.isExternal = () => that.url !== undefined || that.recording !== undefined;
+
+  that.addPC = (pc, p2pKey = undefined) => {
+    if (p2pKey) {
+      if (that.pc === undefined) {
+        that.pc = ErizoMap();
+      }
+      this.pc.add(p2pKey, pc);
+      that.pc.on('ice-state-change', onICEConnectionStateChange);
+      return;
+    }
+    if (that.pc) {
+      that.pc.off('add-stream', onStreamAddedToPC);
+      that.pc.off('remove-stream', onStreamRemovedFroPC);
+      that.pc.off('ice-state-change', onICEConnectionStateChange);
+    }
+    that.pc = pc;
+    that.pc.on('add-stream', onStreamAddedToPC);
+    that.pc.on('remove-stream', onStreamRemovedFroPC);
+    that.pc.on('ice-state-change', onICEConnectionStateChange);
+  };
 
   // Sends data through this stream.
   that.sendData = (msg) => {
@@ -129,9 +174,8 @@ const Stream = (altConnection, specInput) => {
           screen: spec.screen,
           extensionId: that.extensionId,
           desktopStreamId: that.desktopStreamId };
-        that.Connection.GetUserMedia(opt, (stream) => {
-            // navigator.webkitGetUserMedia("audio, video", (stream) => {
 
+        that.ConnectionHelpers.GetUserMedia(opt, (stream) => {
           Logger.info('User has granted access to local media.');
           that.stream = stream;
 
@@ -184,6 +228,11 @@ const Stream = (altConnection, specInput) => {
         });
       }
       that.stream = undefined;
+    }
+    if (that.pc) {
+      that.pc.off('add-stream', spec.onStreamAddedToPC);
+      that.pc.off('remove-stream', spec.onStreamRemovedFroPC);
+      that.pc.off('ice-state-change', spec.onICEConnectionStateChange);
     }
   };
 
@@ -282,9 +331,8 @@ const Stream = (altConnection, specInput) => {
     const config = configInput;
     // TODO: Check for any incompatible options
     if (isUpdate === true) {  // We are updating the stream
-      if (config.video || config.audio || config.screen) {
+      if (config.audio || config.screen) {
         Logger.warning('Cannot update type of subscription');
-        config.video = undefined;
         config.audio = undefined;
         config.screen = undefined;
       }
@@ -323,7 +371,9 @@ const Stream = (altConnection, specInput) => {
     }
     const config = { muteStream: { audio: that.audioMuted, video: that.videoMuted } };
     that.checkOptions(config, true);
-    that.pc.updateSpec(config, callback);
+    if (that.pc) {
+      that.pc.updateSpec(config, that.getID(), callback);
+    }
   };
 
   that.muteAudio = (isMuted, callback = () => {}) => {
@@ -345,7 +395,7 @@ const Stream = (altConnection, specInput) => {
     }
     const config = { qualityLayer: { spatialLayer, temporalLayer } };
     that.checkOptions(config, true);
-    that.pc.updateSpec(config, callback);
+    that.pc.updateSpec(config, that.getID(), callback);
   };
 
   // eslint-disable-next-line no-underscore-dangle
@@ -357,7 +407,20 @@ const Stream = (altConnection, specInput) => {
     }
     const config = { qualityLayer: { spatialLayer: -1, temporalLayer: -1 } };
     that.checkOptions(config, true);
-    that.pc.updateSpec(config, callback);
+    that.pc.updateSpec(config, that.getID(), callback);
+  };
+
+  // eslint-disable-next-line no-underscore-dangle
+  that._setMinSpatialLayer = (spatialLayer, callback = () => {}) => {
+    if (that.room && that.room.p2p) {
+      Logger.warning('setMinSpatialLayer is not implemented in p2p streams');
+      callback('error');
+      return;
+    }
+    const config = { minLayer: { spatialLayer } };
+    that.checkOptions(config, true);
+    Logger.debug('Calling updateSpec with config', config);
+    that.pc.updateSpec(config, that.getID(), callback);
   };
 
   const controlHandler = (handlersInput, publisherSideInput, enable) => {
@@ -393,13 +456,13 @@ const Stream = (altConnection, specInput) => {
       if (that.local) {
         if (that.room.p2p) {
           for (let index = 0; index < that.pc.length; index += 1) {
-            that.pc[index].updateSpec(config, callback);
+            that.pc[index].updateSpec(config, that.getID(), callback);
           }
         } else {
-          that.pc.updateSpec(config, callback);
+          that.pc.updateSpec(config, that.getID(), callback);
         }
       } else {
-        that.pc.updateSpec(config, callback);
+        that.pc.updateSpec(config, that.getID(), callback);
       }
     } else {
       callback('This stream has no peerConnection attached, ignoring');

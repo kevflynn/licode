@@ -16,7 +16,7 @@
 
 namespace erizo {
 
-class WebRtcConnectionStatsListener;
+class MediaStreamStatsListener;
 
 class Stats : public Service {
   DECLARE_LOGGER();
@@ -29,14 +29,12 @@ class Stats : public Service {
 
   std::string getStats();
 
-  inline void setStatsListener(WebRtcConnectionStatsListener* listener) {
-    listener_ = listener;
-  }
-
+  void setStatsListener(MediaStreamStatsListener* listener);
   void sendStats();
 
  private:
-  WebRtcConnectionStatsListener* listener_;
+  boost::mutex listener_mutex_;
+  MediaStreamStatsListener* listener_;
   StatNode root_;
 };
 

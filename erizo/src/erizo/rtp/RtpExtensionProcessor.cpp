@@ -12,7 +12,7 @@ namespace erizo {
 DEFINE_LOGGER(RtpExtensionProcessor, "rtp.RtpExtensionProcessor");
 
 RtpExtensionProcessor::RtpExtensionProcessor(const std::vector<erizo::ExtMap> ext_mappings) :
-    ext_mappings_{ext_mappings} {
+    ext_mappings_{ext_mappings}, video_orientation_{kVideoRotation_0} {
   translationMap_["urn:ietf:params:rtp-hdrext:ssrc-audio-level"] = SSRC_AUDIO_LEVEL;
   translationMap_["http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time"] = ABS_SEND_TIME;
   translationMap_["urn:ietf:params:rtp-hdrext:toffset"] = TOFFSET;
@@ -27,10 +27,10 @@ RtpExtensionProcessor::RtpExtensionProcessor(const std::vector<erizo::ExtMap> ex
 RtpExtensionProcessor::~RtpExtensionProcessor() {
 }
 
-void RtpExtensionProcessor::setSdpInfo(const SdpInfo& theInfo) {
+void RtpExtensionProcessor::setSdpInfo(std::shared_ptr<SdpInfo> theInfo) {
   // We build the Extension Map
-  for (unsigned int i = 0; i < theInfo.extMapVector.size(); i++) {
-    const ExtMap& theMap = theInfo.extMapVector[i];
+  for (unsigned int i = 0; i < theInfo->extMapVector.size(); i++) {
+    const ExtMap& theMap = theInfo->extMapVector[i];
     std::map<std::string, uint8_t>::iterator it;
     switch (theMap.mediaType) {
       case VIDEO_TYPE:
@@ -63,7 +63,7 @@ bool RtpExtensionProcessor::isValidExtension(std::string uri) {
   return value != ext_mappings_.end() && translationMap_.find(uri) != translationMap_.end();
 }
 
-uint32_t RtpExtensionProcessor::processRtpExtensions(std::shared_ptr<dataPacket> p) {
+uint32_t RtpExtensionProcessor::processRtpExtensions(std::shared_ptr<DataPacket> p) {
   const RtpHeader* head = reinterpret_cast<const RtpHeader*>(p->data);
   uint32_t len = p->length;
   std::array<RTPExtensions, 10> extMap;
@@ -96,6 +96,9 @@ uint32_t RtpExtensionProcessor::processRtpExtensions(std::shared_ptr<dataPacket>
             case ABS_SEND_TIME:
               processAbsSendTime(extBuffer);
               break;
+            case VIDEO_ORIENTATION:
+              processVideoOrientation(extBuffer);
+              break;
             default:
               break;
           }
@@ -106,6 +109,16 @@ uint32_t RtpExtensionProcessor::processRtpExtensions(std::shared_ptr<dataPacket>
     }
   }
   return len;
+}
+
+VideoRotation RtpExtensionProcessor::getVideoRotation() {
+  return video_orientation_;
+}
+
+uint32_t RtpExtensionProcessor::processVideoOrientation(char* buf) {
+  VideoOrientation* head = reinterpret_cast<VideoOrientation*>(buf);
+  video_orientation_ = head->getVideoOrientation();
+  return 0;
 }
 
 uint32_t RtpExtensionProcessor::processAbsSendTime(char* buf) {

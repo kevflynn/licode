@@ -22,33 +22,23 @@ SdpHelpers.addSpatialLayer = (cname, msid, mslabel,
   `a=ssrc:${spatialLayerIdRtx} mslabel:${mslabel}\r\n` +
   `a=ssrc:${spatialLayerIdRtx} label:${label}\r\n`;
 
-SdpHelpers.setMaxBW = (sdpInput, spec) => {
-  let r;
-  let a;
-  let sdp = sdpInput;
+SdpHelpers.setMaxBW = (sdp, spec) => {
+  if (!spec.p2p) {
+    return;
+  }
   if (spec.video && spec.maxVideoBW) {
-    sdp = sdp.replace(/b=AS:.*\r\n/g, '');
-    a = sdp.match(/m=video.*\r\n/);
-    if (a == null) {
-      a = sdp.match(/m=video.*\n/);
-    }
-    if (a && (a.length > 0)) {
-      r = `${a[0]}b=AS:${spec.maxVideoBW}\r\n`;
-      sdp = sdp.replace(a[0], r);
+    const video = sdp.getMedia('video');
+    if (video) {
+      video.setBitrate(spec.maxVideoBW);
     }
   }
 
   if (spec.audio && spec.maxAudioBW) {
-    a = sdp.match(/m=audio.*\r\n/);
-    if (a == null) {
-      a = sdp.match(/m=audio.*\n/);
-    }
-    if (a && (a.length > 0)) {
-      r = `${a[0]}b=AS:${spec.maxAudioBW}\r\n`;
-      sdp = sdp.replace(a[0], r);
+    const audio = sdp.getMedia('audio');
+    if (audio) {
+      audio.setBitrate(spec.maxAudioBW);
     }
   }
-  return sdp;
 };
 
 SdpHelpers.enableOpusNacks = (sdpInput) => {
@@ -60,6 +50,16 @@ SdpHelpers.enableOpusNacks = (sdpInput) => {
   }
 
   return sdp;
+};
+
+SdpHelpers.setParamForCodecs = (sdpInfo, mediaType, paramName, value) => {
+  sdpInfo.medias.forEach((mediaInfo) => {
+    if (mediaInfo.id === mediaType) {
+      mediaInfo.codecs.forEach((codec) => {
+        codec.setParam(paramName, value);
+      });
+    }
+  });
 };
 
 export default SdpHelpers;

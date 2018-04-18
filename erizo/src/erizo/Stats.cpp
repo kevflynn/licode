@@ -7,7 +7,7 @@
 #include <string>
 
 #include "Stats.h"
-#include "WebRtcConnection.h"
+#include "MediaStream.h"
 #include "lib/ClockUtils.h"
 
 namespace erizo {
@@ -28,7 +28,13 @@ namespace erizo {
     return root_.toString();
   }
 
+  void Stats::setStatsListener(MediaStreamStatsListener* listener) {
+    boost::mutex::scoped_lock lock(listener_mutex_);
+    listener_ = listener;
+  }
+
   void Stats::sendStats() {
+    boost::mutex::scoped_lock lock(listener_mutex_);
     if (listener_) listener_->notifyStats(getStats());
   }
 }  // namespace erizo

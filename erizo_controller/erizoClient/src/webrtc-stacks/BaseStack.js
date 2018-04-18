@@ -1,4 +1,6 @@
 /* global RTCSessionDescription, RTCIceCandidate, RTCPeerConnection */
+// eslint-disable-next-line
+import SemanticSdp from '../../../common/semanticSdp/SemanticSdp';
 
 import SdpHelpers from '../utils/SdpHelpers';
 import Logger from '../utils/Logger';
@@ -6,8 +8,13 @@ import Logger from '../utils/Logger';
 const BaseStack = (specInput) => {
   const that = {};
   const specBase = specInput;
+  const offerQueue = [];
   let localDesc;
   let remoteDesc;
+  let localSdp;
+  let remoteSdp;
+  let isNegotiating = false;
+  let latestSessionVersion = -1;
 
   Logger.info('Starting Base stack', specBase);
 
@@ -19,19 +26,24 @@ const BaseStack = (specInput) => {
   if (specBase.iceServers !== undefined) {
     that.pcConfig.iceServers = specBase.iceServers;
   }
-  if (specBase.audio === undefined) {
-    specBase.audio = true;
+  if (specBase.forceTurn === true) {
+    that.pcConfig.iceTransportPolicy = 'relay';
   }
-  if (specBase.video === undefined) {
-    specBase.video = true;
+  that.audio = specBase.audio;
+  that.video = specBase.video;
+  if (that.audio === undefined) {
+    that.audio = true;
+  }
+  if (that.video === undefined) {
+    that.video = true;
   }
   specBase.remoteCandidates = [];
   specBase.localCandidates = [];
   specBase.remoteDescriptionSet = false;
 
   that.mediaConstraints = {
-    offerToReceiveVideo: (specBase.video !== undefined),
-    offerToReceiveAudio: (specBase.audio !== undefined),
+    offerToReceiveVideo: (that.video !== undefined && that.video !== false),
+    offerToReceiveAudio: (that.audio !== undefined && that.audio !== false),
   };
 
   that.peerConnection = new RTCPeerConnection(that.pcConfig, that.con);
@@ -79,21 +91,29 @@ const BaseStack = (specInput) => {
     }
   };
 
-  const setLocalDescForOffer = (isSubscribe, sessionDescription) => {
+  const setLocalDescForOffer = (isSubscribe, streamId, sessionDescription) => {
     localDesc = sessionDescription;
     if (!isSubscribe) {
       localDesc.sdp = that.enableSimulcast(localDesc.sdp);
     }
-    localDesc.sdp = SdpHelpers.setMaxBW(localDesc.sdp, specBase);
+    localSdp = SemanticSdp.SDPInfo.processString(localDesc.sdp);
+    SdpHelpers.setMaxBW(localSdp, specBase);
+    localDesc.sdp = localSdp.toString();
+    that.localSdp = localSdp;
+
     specBase.callback({
       type: localDesc.type,
       sdp: localDesc.sdp,
-    });
+      config: { maxVideoBW: specBase.maxVideoBW },
+    }, streamId);
   };
 
   const setLocalDescForAnswerp2p = (sessionDescription) => {
     localDesc = sessionDescription;
-    localDesc.sdp = SdpHelpers.setMaxBW(localDesc.sdp, specBase);
+    localSdp = SemanticSdp.SDPInfo.processString(localDesc.sdp);
+    SdpHelpers.setMaxBW(localSdp, specBase);
+    localDesc.sdp = localSdp.toString();
+    that.localSdp = localSdp;
     specBase.callback({
       type: localDesc.type,
       sdp: localDesc.sdp,
@@ -106,7 +126,10 @@ const BaseStack = (specInput) => {
   const processOffer = (message) => {
     // Its an offer, we assume its p2p
     const msg = message;
-    msg.sdp = SdpHelpers.setMaxBW(msg.sdp, specBase);
+    remoteSdp = SemanticSdp.SDPInfo.processString(msg.sdp);
+    SdpHelpers.setMaxBW(remoteSdp, specBase);
+    msg.sdp = remoteSdp.toString();
+    that.remoteSdp = remoteSdp;
     that.peerConnection.setRemoteDescription(msg).then(() => {
       that.peerConnection.createAnswer(that.mediaConstraints)
       .then(setLocalDescForAnswerp2p).catch(errorCallback.bind(null, 'createAnswer p2p', undefined));
@@ -116,11 +139,23 @@ const BaseStack = (specInput) => {
 
   const processAnswer = (message) => {
     const msg = message;
+
+    remoteSdp = SemanticSdp.SDPInfo.processString(msg.sdp);
+    const sessionVersion = remoteSdp && remoteSdp.origin && remoteSdp.origin.sessionVersion;
+    if (latestSessionVersion >= sessionVersion) {
+      return;
+    }
     Logger.info('Set remote and local description');
+    latestSessionVersion = sessionVersion;
+
+    SdpHelpers.setMaxBW(remoteSdp, specBase);
+    that.setStartVideoBW(remoteSdp);
+    that.setHardMinVideoBW(remoteSdp);
+
+    msg.sdp = remoteSdp.toString();
     Logger.debug('Remote Description', msg.sdp);
     Logger.debug('Local Description', localDesc.sdp);
-
-    msg.sdp = SdpHelpers.setMaxBW(msg.sdp, specBase);
+    that.remoteSdp = remoteSdp;
 
     remoteDesc = msg;
     that.peerConnection.setLocalDescription(localDesc).then(() => {
@@ -136,6 +171,11 @@ const BaseStack = (specInput) => {
         while (specBase.localCandidates.length > 0) {
           // IMPORTANT: preserve ordering of candidates
           specBase.callback({ type: 'candidate', candidate: specBase.localCandidates.shift() });
+        }
+        isNegotiating = false;
+        if (offerQueue.length > 0) {
+          const args = offerQueue.pop();
+          that.createOffer(args[0], args[1], args[2]);
         }
       }).catch(errorCallback.bind(null, 'processAnswer', undefined));
     }).catch(errorCallback.bind(null, 'processAnswer', undefined));
@@ -170,24 +210,17 @@ const BaseStack = (specInput) => {
   // Peerconnection events
 
   that.peerConnection.onicecandidate = onIceCandidate;
-  that.peerConnection.onaddstream = (stream) => {
-    if (that.onaddstream) {
-      that.onaddstream(stream);
-    }
-  };
-  that.peerConnection.onremovestream = (stream) => {
-    if (that.onremovestream) {
-      that.onremovestream(stream);
-    }
-  };
-
-  that.peerConnection.oniceconnectionstatechange = (ev) => {
-    if (that.oniceconnectionstatechange) {
-      that.oniceconnectionstatechange(ev.target.iceConnectionState);
-    }
-  };
-
   // public functions
+
+  that.setStartVideoBW = (sdpInput) => {
+    Logger.error('startVideoBW not implemented for this browser');
+    return sdpInput;
+  };
+
+  that.setHardMinVideoBW = (sdpInput) => {
+    Logger.error('hardMinVideoBw not implemented for this browser');
+    return sdpInput;
+  };
 
   that.enableSimulcast = (sdpInput) => {
     Logger.error('Simulcast not implemented');
@@ -199,9 +232,23 @@ const BaseStack = (specInput) => {
     that.peerConnection.close();
   };
 
-  that.updateSpec = (configInput, callback = () => {}) => {
+  that.setSimulcast = (enable) => {
+    that.simulcast = enable;
+  };
+
+  that.setVideo = (video) => {
+    that.video = video;
+  };
+
+  that.setAudio = (audio) => {
+    that.audio = audio;
+  };
+
+  that.updateSpec = (configInput, streamId, callback = () => {}) => {
     const config = configInput;
-    if (config.maxVideoBW || config.maxAudioBW) {
+    const shouldApplyMaxVideoBWToSdp = specBase.p2p && config.maxVideoBW;
+    const shouldSendMaxVideoBWInOptions = !specBase.p2p && config.maxVideoBW;
+    if (shouldApplyMaxVideoBWToSdp || config.maxAudioBW) {
       if (config.maxVideoBW) {
         Logger.debug('Maxvideo Requested:', config.maxVideoBW,
                                 'limit:', specBase.limitMaxVideoBW);
@@ -218,43 +265,62 @@ const BaseStack = (specInput) => {
         specBase.maxAudioBW = config.maxAudioBW;
       }
 
-      localDesc.sdp = SdpHelpers.setMaxBW(localDesc.sdp, specBase);
+      localSdp = SemanticSdp.SDPInfo.processString(localDesc.sdp);
+      SdpHelpers.setMaxBW(localSdp, specBase);
+      localDesc.sdp = localSdp.toString();
+      that.localSdp = localSdp;
+
       if (config.Sdp || config.maxAudioBW) {
         Logger.debug('Updating with SDP renegotiation', specBase.maxVideoBW, specBase.maxAudioBW);
-        that.peerConnection.setLocalDescription(localDesc).then(() => {
-          remoteDesc.sdp = SdpHelpers.setMaxBW(remoteDesc.sdp, specBase);
-          that.peerConnection.setRemoteDescription(new RTCSessionDescription(remoteDesc))
+        that.peerConnection.setLocalDescription(localDesc)
           .then(() => {
+            remoteSdp = SemanticSdp.SDPInfo.processString(remoteDesc.sdp);
+            SdpHelpers.setMaxBW(remoteSdp, specBase);
+            remoteDesc.sdp = remoteSdp.toString();
+            that.remoteSdp = remoteSdp;
+            return that.peerConnection.setRemoteDescription(new RTCSessionDescription(remoteDesc));
+          }).then(() => {
             specBase.remoteDescriptionSet = true;
-            specBase.callback({ type: 'updatestream', sdp: localDesc.sdp });
-          }).catch(errorCallback.bind(null, 'updateSpec', undefined));
-        }).catch(errorCallback.bind(null, 'updateSpec', callback));
+            specBase.callback({ type: 'updatestream', sdp: localDesc.sdp }, streamId);
+          }).catch(errorCallback.bind(null, 'updateSpec', callback));
       } else {
         Logger.debug('Updating without SDP renegotiation, ' +
-                                'newVideoBW:', specBase.maxVideoBW,
-                                'newAudioBW:', specBase.maxAudioBW);
-        specBase.callback({ type: 'updatestream', sdp: localDesc.sdp });
+                     'newVideoBW:', specBase.maxVideoBW,
+                     'newAudioBW:', specBase.maxAudioBW);
+        specBase.callback({ type: 'updatestream', sdp: localDesc.sdp }, streamId);
       }
     }
-    if (config.minVideoBW || (config.slideShowMode !== undefined) ||
-            (config.muteStream !== undefined) || (config.qualityLayer !== undefined)) {
+    if (shouldSendMaxVideoBWInOptions ||
+        config.minVideoBW ||
+        (config.slideShowMode !== undefined) ||
+        (config.muteStream !== undefined) ||
+        (config.qualityLayer !== undefined) ||
+        (config.minLayer !== undefined) ||
+        (config.video !== undefined)) {
+      Logger.debug('MaxVideoBW Changed to ', config.maxVideoBW);
       Logger.debug('MinVideo Changed to ', config.minVideoBW);
       Logger.debug('SlideShowMode Changed to ', config.slideShowMode);
       Logger.debug('muteStream changed to ', config.muteStream);
-      specBase.callback({ type: 'updatestream', config });
+      Logger.debug('Video Constraints', config.video);
+      specBase.callback({ type: 'updatestream', config }, streamId);
     }
   };
 
-  that.createOffer = (isSubscribe) => {
-    if (isSubscribe !== true) {
+  that.createOffer = (isSubscribe = false, forceOfferToReceive = false, streamId = '') => {
+    if (!isSubscribe && !forceOfferToReceive) {
       that.mediaConstraints = {
         offerToReceiveVideo: false,
         offerToReceiveAudio: false,
       };
     }
-    Logger.debug('Creating offer', that.mediaConstraints);
+    if (isNegotiating) {
+      offerQueue.push([isSubscribe, forceOfferToReceive, streamId]);
+      return;
+    }
+    isNegotiating = true;
+    Logger.debug('Creating offer', that.mediaConstraints, streamId);
     that.peerConnection.createOffer(that.mediaConstraints)
-    .then(setLocalDescForOffer.bind(null, isSubscribe))
+    .then(setLocalDescForOffer.bind(null, isSubscribe, streamId))
     .catch(errorCallback.bind(null, 'Create Offer', undefined));
   };
 

@@ -51,7 +51,7 @@ config.erizoController = {};
 // }
 config.erizoController.iceServers = [{'url': 'stun:stun.l.google.com:19302'}]; // default value: [{'url': 'stun:stun.l.google.com:19302'}]
 
-// Default and max video bandwidth parameters to be used by clients
+// Default and max video bandwidth parameters to be used by clients for both published and subscribed streams
 config.erizoController.defaultVideoBW = 300; //default value: 300
 config.erizoController.maxVideoBW = 300; //default value: 300
 
@@ -79,6 +79,10 @@ config.erizoController.listen_port = 8080; //default value: 8080
 
 // Use the name of the inferface you want to bind to for websockets
 // config.erizoController.networkInterface = 'eth1' // default value: undefined
+
+config.erizoController.exitOnNuveCheckFail = false;  // default value: false
+config.erizoController.allowSinglePC = false;  // default value: false
+config.erizoController.maxErizosUsedByRoom = 100;  // default value: 100
 
 config.erizoController.warning_n_rooms = 15; // default value: 15
 config.erizoController.limit_n_rooms = 20; // default value: 20
@@ -131,6 +135,9 @@ config.erizoAgent.networkinterface = ''; //default value: ''
 //Use individual log files for each of the started erizoJS processes
 //This files will be named erizo-ERIZO_ID_HASH.log
 config.erizoAgent.useIndividualLogFiles = false;
+
+// If true this Agent will launch Debug versions of ErizoJS
+config.erizoAgent.launchDebugErizoJS = false;
 
 // Custom log directory for agent instance log files.
 // If useIndividualLogFiles is enabled, files will go here

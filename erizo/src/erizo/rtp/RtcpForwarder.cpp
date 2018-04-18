@@ -162,7 +162,6 @@ int RtcpForwarder::analyzeFeedback(char *buf, int len) {
   return 0;
 }
 
-
 void RtcpForwarder::checkRtcpFb() {
 }
 
@@ -178,7 +177,7 @@ int RtcpForwarder::addREMB(char* buf, int len, uint32_t bitrate) {
   theREMB.setLength(5);
   theREMB.setREMBBitRate(bitrate);
   theREMB.setREMBNumSSRC(1);
-  theREMB.setREMBFeedSSRC(rtcpSource_->getVideoSourceSSRC());
+  theREMB.setREMBFeedSSRC(0, rtcpSource_->getVideoSourceSSRC());
   int rembLength = (theREMB.getLength()+1)*4;
 
   memcpy(buf, reinterpret_cast<uint8_t*>(&theREMB), rembLength);

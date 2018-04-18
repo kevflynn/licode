@@ -37,17 +37,17 @@ describe('Erizo Agent', function() {
     mocks.stop(licodeConfigMock);
     mocks.deleteRequireCache();
     mocks.reset();
-    GLOBAL.config = {};
+    global.config = {};
   });
 
   it('should create default globals', function() {
     erizoAgent = require('../../erizoAgent/erizoAgent');
 
-    expect(GLOBAL.config.erizoAgent.maxProcesses).to.equal(1);
-    expect(GLOBAL.config.erizoAgent.prerunProcesses).to.equal(1);
-    expect(GLOBAL.config.erizoAgent.publicIP).to.equal('');
-    expect(GLOBAL.config.erizoAgent.instanceLogDir).to.equal('.');
-    expect(GLOBAL.config.erizoAgent.useIndividualLogFiles).to.equal(false);
+    expect(global.config.erizoAgent.maxProcesses).to.equal(1);
+    expect(global.config.erizoAgent.prerunProcesses).to.equal(1);
+    expect(global.config.erizoAgent.publicIP).to.equal('');
+    expect(global.config.erizoAgent.instanceLogDir).to.equal('.');
+    expect(global.config.erizoAgent.useIndividualLogFiles).to.equal(false);
   });
 
   describe('Launch Erizo', function() {
@@ -123,7 +123,7 @@ describe('Erizo Agent', function() {
     it('should create erizos', function() {
       var callback = sinon.stub();
 
-      erizoAgentPublicApi.createErizoJS(callback);
+      erizoAgentPublicApi.createErizoJS(undefined, callback);
 
       expect(childProcessMock.spawn.callCount).to.equal(1);
       expect(childProcessMock.spawn.args[0][0]).to.equal('./launch.sh');
@@ -138,7 +138,7 @@ describe('Erizo Agent', function() {
     it('should delete erizos', function() {
       var erizoId;
       var callback = sinon.stub();
-      erizoAgentPublicApi.createErizoJS(function(type, info) {
+      erizoAgentPublicApi.createErizoJS(undefined, function(type, info) {
         erizoId = info.erizoId;
       });
 

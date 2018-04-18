@@ -26,7 +26,7 @@ typedef unsigned int uint;
 namespace erizo {
 
 // forward declarations
-typedef std::shared_ptr<dataPacket> packetPtr;
+typedef std::shared_ptr<DataPacket> packetPtr;
 class CandidateInfo;
 class WebRtcConnection;
 class IceConnection;
@@ -91,7 +91,7 @@ class IceConnection : public LogContext {
   DECLARE_LOGGER();
 
  public:
-  IceConnection(IceConnectionListener* listener, const IceConfig& ice_config);
+  explicit IceConnection(const IceConfig& ice_config);
 
   virtual ~IceConnection();
 
@@ -107,8 +107,8 @@ class IceConnection : public LogContext {
 
   virtual void updateIceState(IceState state);
   virtual IceState checkIceState();
-  virtual void setIceListener(IceConnectionListener *listener);
-  virtual IceConnectionListener* getIceListener();
+  virtual void setIceListener(std::weak_ptr<IceConnectionListener> listener);
+  virtual std::weak_ptr<IceConnectionListener> getIceListener();
 
   virtual std::string getLocalUsername();
   virtual std::string getLocalPassword();
@@ -117,12 +117,12 @@ class IceConnection : public LogContext {
   virtual std::string iceStateToString(IceState state) const;
 
  protected:
-  inline const char* toLog() {
-    return ("id: " + ice_config_.connection_id + ", " + printLogContext()).c_str();
+  inline std::string toLog() {
+    return "id: " + ice_config_.connection_id + ", " + printLogContext();
   }
 
  protected:
-  IceConnectionListener *listener_;
+  std::weak_ptr<IceConnectionListener> listener_;
   IceState ice_state_;
   IceConfig ice_config_;
 

@@ -49,8 +49,11 @@ window.onload = function () {
   recording = false;
   var screen = getParameterByName('screen');
   var roomName = getParameterByName('room') || 'basicExampleRoom';
+  var singlePC = getParameterByName('singlePC') || false;
   var roomType = getParameterByName('type') || 'erizo';
+  var mediaConfiguration = getParameterByName('mediaConfiguration') || 'default';
   var onlySubscribe = getParameterByName('onlySubscribe');
+  var onlyPublish = getParameterByName('onlyPublish');
   console.log('Selected Room', roomName, 'of type', roomType);
   var config = {audio: true,
                 video: true,
@@ -81,7 +84,11 @@ window.onload = function () {
     req.send(JSON.stringify(roomData));
   };
 
-  var roomData  = {username: 'user', role: 'presenter', room: roomName, type: roomType};
+  var roomData  = {username: 'user',
+                   role: 'presenter',
+                   room: roomName,
+                   type: roomType,
+                   mediaConfiguration: mediaConfiguration};
 
   createToken(roomData, function (response) {
     var token = response;
@@ -89,6 +96,9 @@ window.onload = function () {
     room = Erizo.Room({token: token});
 
     var subscribeToStreams = function (streams) {
+      if (onlyPublish) {
+        return;
+      }
       var cb = function (evt){
           console.log('Bandwidth Alert', evt.msg, evt.bandwidth);
       };
@@ -106,7 +116,9 @@ window.onload = function () {
       var enableSimulcast = getParameterByName('simulcast');
       if (enableSimulcast) options.simulcast = {numSpatialLayers: 2};
 
-      if (!onlySubscribe) room.publish(localStream, options);
+      if (!onlySubscribe) {
+        room.publish(localStream, options);
+      }
       subscribeToStreams(roomEvent.streams);
     });
 
@@ -142,7 +154,7 @@ window.onload = function () {
     });
 
     if (onlySubscribe) {
-      room.connect();
+      room.connect({singlePC: singlePC});
     } else {
       var div = document.createElement('div');
       div.setAttribute('style', 'width: 320px; height: 240px; float:left');
@@ -150,7 +162,7 @@ window.onload = function () {
       document.getElementById('videoContainer').appendChild(div);
 
       localStream.addEventListener('access-accepted', function () {
-        room.connect();
+        room.connect({singlePC: singlePC});
         localStream.show('myVideo');
       });
       localStream.init();
